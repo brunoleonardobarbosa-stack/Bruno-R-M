@@ -5,11 +5,12 @@ from typing import List, Dict, Any
 from datetime import datetime
 from fpdf import FPDF
 import io
+import os
 
 from . import models, database
 
 database.init_db()
-app = FastAPI(title="Neurolink API - Sistema Clínico Avançado")
+app = FastAPI(title="RM Comportamental API - Sistema Clínico Avançado")
 
 def get_db():
     db = database.SessionLocal()
@@ -146,19 +147,32 @@ def generate_draft(data: dict):
 
 class ClinicalPDF(FPDF):
     def header(self):
+        # Logo RM Comportamental
+        logo_path = os.path.join(os.path.dirname(__file__), "logo.jpg")
+        if os.path.exists(logo_path):
+            self.image(logo_path, 10, 8, 25) # x=10, y=8, w=25
+            self.set_x(40) # Mover para a direita para não sobrepor o logo
+            
         self.set_font('helvetica', 'B', 16)
         self.set_text_color(42, 157, 143) # #2a9d8f
-        self.cell(0, 10, 'Neurolink - Relatorio de Evolucao Clinica', border=False, new_x="LMARGIN", new_y="NEXT", align='C')
+        
+        # Alinhar à esquerda se houver logo, senão no centro
+        align_mode = 'L' if os.path.exists(logo_path) else 'C'
+        self.cell(0, 10, 'RM Comportamental - Relatorio de Evolucao Clinica', border=False, new_x="LMARGIN", new_y="NEXT", align=align_mode)
+        
+        if os.path.exists(logo_path):
+            self.set_x(40)
+            
         self.set_font('helvetica', '', 9)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 5, 'Sistema de Registro Clinico e Compliance EVV', border=False, new_x="LMARGIN", new_y="NEXT", align='C')
-        self.ln(10)
+        self.cell(0, 5, 'Sistema de Registro Clinico e Compliance EVV', border=False, new_x="LMARGIN", new_y="NEXT", align=align_mode)
+        self.ln(12)
 
     def footer(self):
         self.set_y(-15)
         self.set_font('helvetica', 'I', 8)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}} | Neurolink Cloud', align='C')
+        self.cell(0, 10, f'Pagina {self.page_no()}/{{nb}} | RM Comportamental Cloud', align='C')
 
 # --- CLINICAL EVOLUTIONS ---
 @app.get("/evolutions")

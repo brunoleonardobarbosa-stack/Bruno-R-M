@@ -7,7 +7,7 @@ import os
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
-st.set_page_config(page_title="Neurolink Cloud", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="RM Comportamental", page_icon="🌳", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -45,8 +45,15 @@ if "username" not in st.session_state:
     st.session_state["username"] = None
 
 if not st.session_state["logged_in"]:
-    st.title("🧠 Neurolink - Cloud System (Fase 4)")
-    st.markdown("Sistema conectado à API real, com Automação de Relatórios por IA e Compliance EVV.")
+    logo_path = os.path.join(os.path.dirname(__file__), "logo.jpg")
+    
+    col_logo_1, col_logo_2, col_logo_3 = st.columns([2, 1, 2])
+    with col_logo_2:
+        if os.path.exists(logo_path):
+            st.image(logo_path, use_container_width=True)
+            
+    st.markdown("<h1 style='text-align: center; color: #2a9d8f;'>🌳 RM Comportamental</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #666;'>Sistema Clínico Inteligente com Automação de Relatórios por IA e Compliance EVV.</p>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -81,6 +88,9 @@ else:
     # PORTAL DA FAMÍLIA
     # ==========================================
     if st.session_state["user_role"] == "familia":
+        logo_path = os.path.join(os.path.dirname(__file__), "logo.jpg")
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, use_container_width=True)
         st.sidebar.title("👨‍👩‍👧 Portal da Família")
         st.sidebar.info("Criança Vinculada: João Silva")
         if st.sidebar.button("Sair Seguramente"):
@@ -123,7 +133,10 @@ else:
     # PORTAL CLÍNICO
     # ==========================================
     else:
-        st.sidebar.title("🧠 Neurolink Clínica")
+        logo_path = os.path.join(os.path.dirname(__file__), "logo.jpg")
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, use_container_width=True)
+        st.sidebar.title("🌳 RM Comportamental")
         role_label = "Admin (Coordenação)" if st.session_state["user_role"] == "admin" else "Terapeuta (AT)"
         st.sidebar.info(f"Usuário: **{st.session_state['username']}**\nNível: {role_label}")
         
