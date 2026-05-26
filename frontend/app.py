@@ -83,6 +83,7 @@ else:
     evolutions = get_data("evolutions")
     documents = get_data("documents")
     metadata = get_data("metadata")
+    professionals = get_data("professionals")
 
     # ==========================================
     # PORTAL DA FAMÍLIA
@@ -145,6 +146,7 @@ else:
         if st.session_state["user_role"] == "admin":
             menu_options.append("📄 Gestão de Documentos (Cofre)")
             menu_options.append("💰 Faturamento Automático")
+            menu_options.append("⚙️ Cadastro Geral")
 
         menu_selection = st.sidebar.radio("Módulos", menu_options)
         
@@ -170,6 +172,17 @@ else:
                 with st.expander(f"🧑‍⚕️ {p['nome']} - {p['diagnostico']}"):
                     st.write(f"Sessões Usadas: {p['sessoes_usadas']}/{max(p['sessoes_autorizadas'], 1)}")
                     st.progress(p['sessoes_usadas'] / max(p['sessoes_autorizadas'], 1))
+                    
+                    st.markdown("#### Ficha Cadastral")
+                    col_c1, col_c2 = st.columns(2)
+                    with col_c1:
+                        st.write(f"**Plano de Saúde:** {p.get('plano_saude') or 'Não informado'}")
+                        st.write(f"**Pai:** {p.get('nome_pai') or 'Não informado'}")
+                        st.write(f"**Mãe:** {p.get('nome_mae') or 'Não informado'}")
+                    with col_c2:
+                        st.write(f"**Telefone:** {p.get('telefone') or 'Não informado'}")
+                        st.write(f"**E-mail:** {p.get('email') or 'Não informado'}")
+                        st.write(f"**Endereço:** {p.get('endereco') or 'Não informado'}")
                     
                     st.markdown("#### Histórico de Evoluções")
                     p_evs = [e for e in evolutions if e["paciente"] == p["nome"]]
@@ -298,3 +311,78 @@ else:
                             st.rerun()
                         else:
                             st.error("Erro ao salvar sessão.")
+
+        elif menu_selection == "⚙️ Cadastro Geral":
+            st.title("⚙️ Cadastro Geral de Clínicos e Pacientes")
+            st.markdown("Área restrita à coordenação para expansão da clínica.")
+            
+            tab_cad_paciente, tab_cad_profissional = st.tabs(["🧑‍⚕️ Novo Paciente", "👥 Novo Profissional"])
+            
+            with tab_cad_paciente:
+                st.subheader("Ficha de Cadastro de Paciente")
+                with st.form("form_cad_pac"):
+                    pac_nome = st.text_input("Nome Completo do Paciente")
+                    pac_idade = st.number_input("Idade", min_value=0, max_value=120, value=7)
+                    pac_diag = st.text_input("Diagnóstico (Ex: TEA, TDAH, etc.)")
+                    
+                    st.markdown("---")
+                    st.write("**Dados de Contato e Faturamento**")
+                    pac_plano = st.text_input("Plano de Saúde / Convênio")
+                    pac_pai = st.text_input("Nome Completo do Pai")
+                    pac_mae = st.text_input("Nome Completo da Mãe")
+                    pac_tel = st.text_input("Telefone para Contato")
+                    pac_email = st.text_input("E-mail")
+                    pac_end = st.text_input("Endereço Completo")
+                    
+                    st.markdown("---")
+                    st.write("**Perfil Sensorial e Clínico**")
+                    pac_auditiva = st.checkbox("Hipersensibilidade Auditiva")
+                    pac_visual = st.checkbox("Hipersensibilidade Visual")
+                    pac_verbal = st.checkbox("Paciente Não-Verbal")
+                    pac_sessoes = st.number_input("Sessões Autorizadas (Pacote)", min_value=0, max_value=500, value=20)
+                    
+                    if st.form_submit_button("Cadastrar Paciente ✅"):
+                        if not pac_nome or not pac_diag:
+                            st.warning("Preencha ao menos o nome e o diagnóstico.")
+                        else:
+                            status, resp = post_data("patients", {
+                                "nome": pac_nome, "idade": pac_idade, "diagnostico": pac_diag,
+                                "hip_auditiva": pac_auditiva, "hip_visual": pac_visual, "nao_verbal": pac_verbal,
+                                "sessoes_autorizadas": pac_sessoes, "plano_saude": pac_plano,
+                                "nome_pai": pac_pai, "nome_mae": pac_mae, "telefone": pac_tel, "email": pac_email,
+                                "endereco": pac_end
+                            })
+                            if status == 200:
+                                st.success("Paciente cadastrado com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error("Erro ao cadastrar paciente.")
+                                
+            with tab_cad_profissional:
+                st.subheader("Ficha de Cadastro de Profissional")
+                with st.form("form_cad_prof"):
+                    prof_user = st.text_input("Nome de Usuário (login)", placeholder="Ex: joao.terapeuta")
+                    prof_nome = st.text_input("Nome Completo")
+                    prof_esp = st.selectbox("Especialidade", ["Análise do Comportamento (ABA)", "Terapia Ocupacional", "Fonoaudiologia", "Psicopedagogia"])
+                    prof_reg = st.text_input("Registro do Conselho (Ex: CRP 06/12345)")
+                    
+                    st.markdown("---")
+                    st.write("**Dados de Contato**")
+                    prof_tel = st.text_input("Telefone")
+                    prof_email = st.text_input("E-mail")
+                    prof_end = st.text_input("Endereço Residencial")
+                    
+                    if st.form_submit_button("Cadastrar Profissional ✅"):
+                        if not prof_user or not prof_nome or not prof_reg:
+                            st.warning("Preencha usuário, nome completo e registro do conselho.")
+                        else:
+                            status, resp = post_data("professionals", {
+                                "username": prof_user, "nome_completo": prof_nome, "especialidade": prof_esp,
+                                "registro_conselho": prof_reg, "telefone": prof_tel, "email": prof_email,
+                                "endereco": prof_end
+                            })
+                            if status == 200:
+                                st.success("Profissional cadastrado com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error(resp.get("detail", "Erro ao cadastrar profissional."))

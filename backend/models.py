@@ -18,6 +18,14 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(Enum(RoleEnum), nullable=False)
+    
+    # NOVOS CAMPOS - Fase 6 (Profissionais)
+    full_name = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    council_registry = Column(String, nullable=True)
+    specialty = Column(String, nullable=True)
 
     appointments = relationship("Appointment", back_populates="therapist", foreign_keys="Appointment.therapist_id")
 
@@ -36,6 +44,14 @@ class Patient(Base):
     # Faturamento / Planos
     sessions_authorized = Column(Integer, default=0)
     sessions_used = Column(Integer, default=0)
+    
+    # NOVOS CAMPOS - Fase 6 (Dados Adicionais)
+    health_insurance = Column(String, nullable=True)
+    father_name = Column(String, nullable=True)
+    mother_name = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    address = Column(String, nullable=True)
     
     # Relações
     appointments = relationship("Appointment", back_populates="patient")

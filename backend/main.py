@@ -56,7 +56,13 @@ def get_patients(db: Session = Depends(get_db)):
         {
             "id": p.id, "nome": p.name, "idade": p.age, "diagnostico": p.diagnosis,
             "hip_auditiva": p.hip_auditiva, "hip_visual": p.hip_visual, "nao_verbal": p.nao_verbal,
-            "sessoes_autorizadas": p.sessions_authorized, "sessoes_usadas": p.sessions_used
+            "sessoes_autorizadas": p.sessions_authorized, "sessoes_usadas": p.sessions_used,
+            "plano_saude": p.health_insurance,
+            "nome_pai": p.father_name,
+            "nome_mae": p.mother_name,
+            "telefone": p.phone,
+            "email": p.email,
+            "endereco": p.address
         } for p in patients
     ]
 
@@ -67,7 +73,13 @@ def create_patient(data: dict, db: Session = Depends(get_db)):
         hip_auditiva=data.get("hip_auditiva", False), 
         hip_visual=data.get("hip_visual", False),
         nao_verbal=data.get("nao_verbal", False),
-        sessions_authorized=data.get("sessoes_autorizadas", 0)
+        sessions_authorized=data.get("sessoes_autorizadas", 0),
+        health_insurance=data.get("plano_saude"),
+        father_name=data.get("nome_pai"),
+        mother_name=data.get("nome_mae"),
+        phone=data.get("telefone"),
+        email=data.get("email"),
+        address=data.get("endereco")
     )
     db.add(new_patient)
     db.commit()
@@ -302,6 +314,45 @@ def create_document(data: dict, db: Session = Depends(get_db)):
     db.add(new_doc)
     db.commit()
     return {"msg": "Documento armazenado com segurança no cofre!"}
+
+# --- PROFESSIONALS ---
+@app.get("/professionals")
+def get_professionals(db: Session = Depends(get_db)):
+    profs = db.query(models.User).filter(models.User.role != models.RoleEnum.FAMILIA).all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "nome_completo": u.full_name,
+            "endereco": u.address,
+            "telefone": u.phone,
+            "email": u.email,
+            "registro_conselho": u.council_registry,
+            "especialidade": u.specialty
+        } for u in profs
+    ]
+
+@app.post("/professionals")
+def create_professional(data: dict, db: Session = Depends(get_db)):
+    existing = db.query(models.User).filter(models.User.username == data["username"]).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Nome de usuário já cadastrado!")
+        
+    new_user = models.User(
+        username=data["username"],
+        hashed_password="hashed_pass",
+        role=models.RoleEnum.TERAPEUTA,
+        full_name=data["nome_completo"],
+        address=data["endereco"],
+        phone=data["telefone"],
+        email=data["email"],
+        council_registry=data["registro_conselho"],
+        specialty=data["especialidade"]
+    )
+    db.add(new_user)
+    db.commit()
+    return {"msg": "Profissional cadastrado com sucesso!"}
 
 @app.get("/metadata")
 def get_metadata(db: Session = Depends(get_db)):
