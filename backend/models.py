@@ -112,3 +112,8 @@ class Document(Base):
     file_content = Column(String, nullable=False) 
     
     patient = relationship("Patient", back_populates="documents")
+
+class Specialty(Base):
+    __tablename__ = 'specialties'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)

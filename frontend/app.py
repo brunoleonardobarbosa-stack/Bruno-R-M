@@ -84,6 +84,8 @@ else:
     documents = get_data("documents")
     metadata = get_data("metadata")
     professionals = get_data("professionals")
+    specialties = get_data("specialties")
+    rooms = get_data("rooms")
 
     # ==========================================
     # PORTAL DA FAMÍLIA
@@ -252,7 +254,8 @@ else:
             st.markdown("Coleta rápida seguida de Automação de Relatório (IA) e Assinatura Eletrônica (EVV).")
             
             pac_sessao = st.selectbox("Paciente em Sessão Ativa", [p["nome"] for p in patients])
-            area_sessao = st.selectbox("Especialidade", ["Terapia Ocupacional", "Fonoaudiologia", "Análise do Comportamento (ABA)"])
+            specs_list = [s["nome"] for s in specialties] if specialties else ["Análise do Comportamento (ABA)", "Terapia Ocupacional", "Fonoaudiologia", "Psicopedagogia"]
+            area_sessao = st.selectbox("Especialidade", specs_list)
             
             # Controle de fluxo do wizard da sessão
             if "sessao_step" not in st.session_state: st.session_state["sessao_step"] = 1
@@ -291,16 +294,44 @@ else:
                 texto_final = st.text_area("Relatório Clínico (SOAP)", value=st.session_state["draft_ia"], height=150)
                 
                 st.markdown("### 🔐 Electronic Visit Verification (EVV)")
-                assinatura = st.text_input("Assinatura Eletrônica (Nome do Pai/Mãe ou PIN)", placeholder="Solicite ao familiar que digite o nome aqui")
+                st.write("Solicite ao familiar que assine com o dedo ou mouse abaixo:")
                 
+                from streamlit_drawable_canvas import st_canvas
+                import base64
+                import numpy as np
+                from PIL import Image
+                import io
+                
+                canvas_result = st_canvas(
+                    fill_color="rgba(255, 255, 255, 0)",
+                    stroke_width=3,
+                    stroke_color="#000000",
+                    background_color="#ffffff",
+                    height=120,
+                    width=400,
+                    drawing_mode="freedraw",
+                    key="canvas_sig",
+                )
+                
+                is_signed = False
+                if canvas_result.image_data is not None:
+                    alpha_channel = canvas_result.image_data[:, :, 3]
+                    if np.sum(alpha_channel) > 0:
+                        is_signed = True
+                        
                 if st.button("Assinar e Salvar Sessão ✅"):
-                    if not assinatura:
+                    if not is_signed:
                         st.warning("A assinatura do responsável é obrigatória (EVV)!")
                     else:
+                        img = Image.fromarray(canvas_result.image_data.astype(np.uint8))
+                        buffered = io.BytesIO()
+                        img.save(buffered, format="PNG")
+                        sig_b64 = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode("utf-8")
+                        
                         status, resp = post_data("evolutions", {
                             "paciente": pac_sessao, "data": datetime.now().strftime("%Y-%m-%d"), "area": area_sessao,
                             "metrics": {"engajamento_score": st.session_state["engajamento"], "crises_registradas": st.session_state["freq_crise"]},
-                            "ai_draft": texto_final, "signature": assinatura
+                            "ai_draft": texto_final, "signature": sig_b64
                         })
                         if status == 200:
                             st.success("✅ Sessão salva! Relatório aprovado, assinatura validada e faturamento descontado.")
@@ -316,7 +347,7 @@ else:
             st.title("⚙️ Cadastro Geral de Clínicos e Pacientes")
             st.markdown("Área restrita à coordenação para expansão da clínica.")
             
-            tab_cad_paciente, tab_cad_profissional = st.tabs(["🧑‍⚕️ Novo Paciente", "👥 Novo Profissional"])
+            tab_cad_paciente, tab_cad_profissional, tab_cad_infra = st.tabs(["🧑‍⚕️ Novo Paciente", "👥 Novo Profissional", "🏫 Salas & Especialidades"])
             
             with tab_cad_paciente:
                 st.subheader("Ficha de Cadastro de Paciente")
@@ -363,7 +394,8 @@ else:
                 with st.form("form_cad_prof"):
                     prof_user = st.text_input("Nome de Usuário (login)", placeholder="Ex: joao.terapeuta")
                     prof_nome = st.text_input("Nome Completo")
-                    prof_esp = st.selectbox("Especialidade", ["Análise do Comportamento (ABA)", "Terapia Ocupacional", "Fonoaudiologia", "Psicopedagogia"])
+                    prof_esp_list = [s["nome"] for s in specialties] if specialties else ["Análise do Comportamento (ABA)", "Terapia Ocupacional", "Fonoaudiologia", "Psicopedagogia"]
+                    prof_esp = st.selectbox("Especialidade", prof_esp_list)
                     prof_reg = st.text_input("Registro do Conselho (Ex: CRP 06/12345)")
                     
                     st.markdown("---")
@@ -386,3 +418,45 @@ else:
                                 st.rerun()
                             else:
                                 st.error(resp.get("detail", "Erro ao cadastrar profissional."))
+
+            with tab_cad_infra:
+                st.subheader("Gerenciamento de Infraestrutura Clínica")
+                col_infra_1, col_infra_2 = st.columns(2)
+                
+                with col_infra_1:
+                    st.write("##### Adicionar Nova Sala")
+                    with st.form("form_add_room"):
+                        room_name = st.text_input("Nome da Sala (Ex: Sala de Psicomotricidade)")
+                        if st.form_submit_button("Salvar Sala ✅"):
+                            if room_name:
+                                status, resp = post_data("rooms", {"nome": room_name})
+                                st.success(resp.get("msg", "Sala cadastrada!"))
+                                st.rerun()
+                            else:
+                                st.warning("Digite o nome da sala.")
+                                
+                    st.write("##### Salas Atuais")
+                    if rooms:
+                        for r in rooms:
+                            st.caption(f"🚪 {r['nome']}")
+                    else:
+                        st.info("Nenhuma sala cadastrada.")
+                        
+                with col_infra_2:
+                    st.write("##### Adicionar Nova Especialidade")
+                    with st.form("form_add_spec"):
+                        spec_name = st.text_input("Nome da Especialidade (Ex: Terapia Integração Sensorial)")
+                        if st.form_submit_button("Salvar Especialidade ✅"):
+                            if spec_name:
+                                status, resp = post_data("specialties", {"nome": spec_name})
+                                st.success(resp.get("msg", "Especialidade cadastrada!"))
+                                st.rerun()
+                            else:
+                                st.warning("Digite o nome da especialidade.")
+                                
+                    st.write("##### Especialidades Atuais")
+                    if specialties:
+                        for s in specialties:
+                            st.caption(f"🧬 {s['nome']}")
+                    else:
+                        st.info("Nenhuma especialidade cadastrada.")

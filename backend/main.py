@@ -33,6 +33,12 @@ def setup_initial_data(db: Session = Depends(get_db)):
     s2 = models.ResourceRoom(name="Sala de Integração Sensorial (IS)")
     db.add_all([s1, s2])
 
+    sp1 = models.Specialty(name="Análise do Comportamento (ABA)")
+    sp2 = models.Specialty(name="Terapia Ocupacional")
+    sp3 = models.Specialty(name="Fonoaudiologia")
+    sp4 = models.Specialty(name="Psicopedagogia")
+    db.add_all([sp1, sp2, sp3, sp4])
+
     p1 = models.Patient(name="João Silva", age=7, diagnosis="TEA", hip_auditiva=True, nao_verbal=True, sessions_authorized=40, sessions_used=15)
     p2 = models.Patient(name="Maria Souza", age=9, diagnosis="TDAH", hip_visual=True, sessions_authorized=20, sessions_used=18)
     db.add_all([p1, p2])
@@ -266,16 +272,33 @@ def get_evolution_pdf(evolution_id: int, db: Session = Depends(get_db)):
     
     pdf.set_font("helvetica", "", 10)
     pdf.set_text_color(43, 45, 66)
-    pdf.cell(50, 6, "Assinatura do Familiar:")
-    pdf.set_font("helvetica", "B", 10)
     
     sig = evolution.guardian_signature or "NAO ASSINADO"
-    sig = sig.encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 6, sig, new_x="LMARGIN", new_y="NEXT")
-    
+    if sig.startswith("data:image/"):
+        try:
+            import base64
+            from PIL import Image
+            import io
+            header, encoded = sig.split(",", 1)
+            img_data = base64.b64decode(encoded)
+            img_sig = Image.open(io.BytesIO(img_data))
+            
+            pdf.cell(50, 6, "Assinatura Digital (EVV):")
+            # Insere a imagem da assinatura no PDF
+            pdf.image(img_sig, x=pdf.get_x(), y=pdf.get_y() - 3, w=45, h=12)
+            pdf.ln(14)
+        except Exception:
+            pdf.cell(0, 6, "[Erro ao renderizar assinatura canvas]", new_x="LMARGIN", new_y="NEXT")
+    else:
+        pdf.cell(50, 6, "Assinatura do Familiar:")
+        pdf.set_font("helvetica", "B", 10)
+        sig_clean = sig.encode('latin-1', 'replace').decode('latin-1')
+        pdf.cell(0, 6, sig_clean, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(5)
+        
     pdf.set_font("helvetica", "", 8)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 6, f"Assinatura colhida eletronicamente via aplicativo Neurolink em {evolution.date_str}.", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Assinatura colhida eletronicamente via aplicativo RM Comportamental em {evolution.date_str}.", new_x="LMARGIN", new_y="NEXT")
     
     # Gerar como string de bytes binarios (fpdf2 usa output(dest='S') ou output() retornando bytes dependendo da versao, dest='S' eh compativel)
     pdf_bytes = pdf.output()
@@ -354,8 +377,41 @@ def create_professional(data: dict, db: Session = Depends(get_db)):
     db.commit()
     return {"msg": "Profissional cadastrado com sucesso!"}
 
+# --- SPECIALTIES ---
+@app.get("/specialties")
+def get_specialties(db: Session = Depends(get_db)):
+    specs = db.query(models.Specialty).all()
+    return [{"id": s.id, "nome": s.name} for s in specs]
+
+@app.post("/specialties")
+def create_specialty(data: dict, db: Session = Depends(get_db)):
+    existing = db.query(models.Specialty).filter(models.Specialty.name == data["nome"]).first()
+    if existing:
+        return {"msg": "Especialidade já cadastrada."}
+    new_spec = models.Specialty(name=data["nome"])
+    db.add(new_spec)
+    db.commit()
+    return {"msg": "Especialidade cadastrada com sucesso!"}
+
+# --- ROOMS ---
+@app.get("/rooms")
+def get_rooms(db: Session = Depends(get_db)):
+    rooms = db.query(models.ResourceRoom).all()
+    return [{"id": r.id, "nome": r.name} for r in rooms]
+
+@app.post("/rooms")
+def create_room(data: dict, db: Session = Depends(get_db)):
+    existing = db.query(models.ResourceRoom).filter(models.ResourceRoom.name == data["nome"]).first()
+    if existing:
+        return {"msg": "Sala já cadastrada."}
+    new_room = models.ResourceRoom(name=data["nome"])
+    db.add(new_room)
+    db.commit()
+    return {"msg": "Sala cadastrada com sucesso!"}
+
 @app.get("/metadata")
 def get_metadata(db: Session = Depends(get_db)):
     therapists = [u.username for u in db.query(models.User).filter(models.User.role != models.RoleEnum.FAMILIA).all()]
     rooms = [r.name for r in db.query(models.ResourceRoom).all()]
-    return {"therapists": therapists, "rooms": rooms}
+    specialties = [s.name for s in db.query(models.Specialty).all()]
+    return {"therapists": therapists, "rooms": rooms, "specialties": specialties}

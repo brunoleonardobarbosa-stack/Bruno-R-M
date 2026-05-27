@@ -6,3 +6,4 @@ streamlit
 requests
 pandas
 fpdf2
+streamlit-drawable-canvas
