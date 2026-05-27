@@ -2,7 +2,6 @@ services:
   # 1. Serviço do Backend (FastAPI)
   - type: web
     name: neurolink-api
-    region: oregon
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
@@ -11,23 +10,17 @@ services:
         fromDatabase:
           name: neurolink-db
           property: connectionString
-      - key: PYTHONUNBUFFERED
-        value: "1"
 
   # 2. Serviço do Frontend (Streamlit)
   - type: web
     name: neurolink-clinica
-    region: oregon
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: API_URL
         value: https://neurolink-api.onrender.com
-      - key: PYTHONUNBUFFERED
-        value: "1"
 
 databases:
   - name: neurolink-db
-    region: oregon
     plan: free

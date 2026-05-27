@@ -1,28 +1,15 @@
-import sys
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from typing import List, Dict, Any
+from datetime import datetime
+from fpdf import FPDF
+import io
+import os
 
-try:
-    from fastapi import FastAPI, Depends, HTTPException, status
-    from fastapi.responses import StreamingResponse
-    from sqlalchemy.orm import Session
-    from typing import List, Dict, Any
-    from datetime import datetime
-    from fpdf import FPDF
-    import io
-    import os
-    
-    from . import models, database
-except Exception as e:
-    print("FATAL IMPORT ERROR:", e, file=sys.stderr)
-    sys.stderr.flush()
-    raise e
+from . import models, database
 
-try:
-    database.init_db()
-except Exception as e:
-    print("FATAL DATABASE INIT ERROR:", e, file=sys.stderr)
-    sys.stderr.flush()
-    raise e
-
+database.init_db()
 app = FastAPI(title="RM Comportamental API - Sistema Clínico Avançado")
 
 def get_db():
@@ -32,32 +19,15 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/login")
-def login_route(data: dict, db: Session = Depends(get_db)):
-    username_or_cpf = data.get("username")
-    password = data.get("password")
-    user = db.query(models.User).filter(
-        (models.User.username == username_or_cpf) | (models.User.cpf == username_or_cpf)
-    ).first()
-    if not user or user.hashed_password != password:
-        raise HTTPException(status_code=401, detail="Usuário/CPF ou senha incorretos!")
-    return {
-        "username": user.username,
-        "role": user.role.value.lower(),
-        "nome_completo": user.full_name,
-        "cpf": user.cpf
-    }
-
 # --- Rotas para Setup de Mock Data Iniciais ---
 @app.post("/setup")
 def setup_initial_data(db: Session = Depends(get_db)):
     if db.query(models.User).first():
         return {"msg": "Banco já possui dados."}
 
-    u1 = models.User(username="admin", cpf="00000000000", hashed_password="admin", role=models.RoleEnum.ADMIN)
-    u2 = models.User(username="ana", cpf="11111111111", hashed_password="ana", role=models.RoleEnum.TERAPEUTA)
-    u3 = models.User(username="22222222222", cpf="22222222222", hashed_password="familia", role=models.RoleEnum.FAMILIA)
-    db.add_all([u1, u2, u3])
+    u1 = models.User(username="admin", hashed_password="hashed_pass", role=models.RoleEnum.ADMIN)
+    u2 = models.User(username="ana", hashed_password="hashed_pass", role=models.RoleEnum.TERAPEUTA)
+    db.add_all([u1, u2])
 
     s1 = models.ResourceRoom(name="Consultório 01")
     s2 = models.ResourceRoom(name="Sala de Integração Sensorial (IS)")
@@ -69,7 +39,7 @@ def setup_initial_data(db: Session = Depends(get_db)):
     sp4 = models.Specialty(name="Psicopedagogia")
     db.add_all([sp1, sp2, sp3, sp4])
 
-    p1 = models.Patient(name="João Silva", age=7, diagnosis="TEA", hip_auditiva=True, nao_verbal=True, sessions_authorized=40, sessions_used=15, parent_cpf="22222222222")
+    p1 = models.Patient(name="João Silva", age=7, diagnosis="TEA", hip_auditiva=True, nao_verbal=True, sessions_authorized=40, sessions_used=15)
     p2 = models.Patient(name="Maria Souza", age=9, diagnosis="TDAH", hip_visual=True, sessions_authorized=20, sessions_used=18)
     db.add_all([p1, p2])
     db.commit()
@@ -98,8 +68,7 @@ def get_patients(db: Session = Depends(get_db)):
             "nome_mae": p.mother_name,
             "telefone": p.phone,
             "email": p.email,
-            "endereco": p.address,
-            "parent_cpf": p.parent_cpf
+            "endereco": p.address
         } for p in patients
     ]
 
@@ -116,27 +85,10 @@ def create_patient(data: dict, db: Session = Depends(get_db)):
         mother_name=data.get("nome_mae"),
         phone=data.get("telefone"),
         email=data.get("email"),
-        address=data.get("endereco"),
-        parent_cpf=data.get("parent_cpf")
+        address=data.get("endereco")
     )
     db.add(new_patient)
     db.commit()
-
-    parent_cpf = data.get("parent_cpf")
-    senha = data.get("senha")
-    if parent_cpf and senha:
-        existing_user = db.query(models.User).filter(models.User.cpf == parent_cpf).first()
-        if not existing_user:
-            new_user = models.User(
-                username=parent_cpf,
-                cpf=parent_cpf,
-                hashed_password=senha,
-                role=models.RoleEnum.FAMILIA,
-                full_name=data.get("nome_mae") or data.get("nome_pai") or data["nome"]
-            )
-            db.add(new_user)
-            db.commit()
-            
     return {"msg": "Paciente salvo!"}
 
 # --- APPOINTMENTS (Smart Scheduling) ---
@@ -344,14 +296,9 @@ def get_evolution_pdf(evolution_id: int, db: Session = Depends(get_db)):
         pdf.cell(0, 6, sig_clean, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(5)
         
-    signed_timestamp = evolution.signed_at or f"{evolution.date_str} (Horário da Sessão)"
-    geo_str = f"Lat: {evolution.latitude}, Lon: {evolution.longitude}" if (evolution.latitude is not None and evolution.longitude is not None) else "Localização não autorizada pelo navegador/dispositivo"
-
     pdf.set_font("helvetica", "", 8)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 5, "Assinatura colhida eletronicamente via aplicativo RM Comportamental.", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 5, f"Data/Hora Sincronizada: {signed_timestamp}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 5, f"Telemetria EVV: {geo_str}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Assinatura colhida eletronicamente via aplicativo RM Comportamental em {evolution.date_str}.", new_x="LMARGIN", new_y="NEXT")
     
     # Gerar como string de bytes binarios (fpdf2 usa output(dest='S') ou output() retornando bytes dependendo da versao, dest='S' eh compativel)
     pdf_bytes = pdf.output()
@@ -367,10 +314,7 @@ def create_evolution(data: dict, db: Session = Depends(get_db)):
     patient = db.query(models.Patient).filter(models.Patient.name == data["paciente"]).first()
     new_ev = models.ClinicalEvolution(
         patient_id=patient.id, date_str=data["data"], area=data["area"], metrics=data["metrics"],
-        ai_draft_text=data.get("ai_draft"), guardian_signature=data.get("signature"),
-        latitude=data.get("latitude"),
-        longitude=data.get("longitude"),
-        signed_at=data.get("signed_at")
+        ai_draft_text=data.get("ai_draft"), guardian_signature=data.get("signature")
     )
     db.add(new_ev)
     patient.sessions_used += 1
@@ -408,30 +352,20 @@ def get_professionals(db: Session = Depends(get_db)):
             "telefone": u.phone,
             "email": u.email,
             "registro_conselho": u.council_registry,
-            "especialidade": u.specialty,
-            "cpf": u.cpf
+            "especialidade": u.specialty
         } for u in profs
     ]
 
 @app.post("/professionals")
 def create_professional(data: dict, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(
-        (models.User.username == data["username"]) | (models.User.cpf == data.get("cpf"))
-    ).first()
+    existing = db.query(models.User).filter(models.User.username == data["username"]).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Nome de usuário ou CPF já cadastrado!")
+        raise HTTPException(status_code=400, detail="Nome de usuário já cadastrado!")
         
-    role_str = data.get("role", "TERAPEUTA").upper()
-    if role_str in models.RoleEnum.__members__:
-        role_enum = models.RoleEnum[role_str]
-    else:
-        role_enum = models.RoleEnum.TERAPEUTA
-
     new_user = models.User(
         username=data["username"],
-        hashed_password=data.get("senha", "hashed_pass"),
-        role=role_enum,
-        cpf=data.get("cpf"),
+        hashed_password="hashed_pass",
+        role=models.RoleEnum.TERAPEUTA,
         full_name=data["nome_completo"],
         address=data["endereco"],
         phone=data["telefone"],

@@ -44,9 +44,6 @@ if "user_role" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state["username"] = None
 
-if "user_cpf" not in st.session_state:
-    st.session_state["user_cpf"] = None
-
 if not st.session_state["logged_in"]:
     logo_path = os.path.join(os.path.dirname(__file__), "logo.jpg")
     
@@ -61,20 +58,23 @@ if not st.session_state["logged_in"]:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.container(border=True):
-            st.info("Acesse com CPF ou usuário administrador:\n- Admin: **00000000000** (senha: `admin`)\n- Terapeuta: **11111111111** (senha: `ana`)\n- Família: **22222222222** (senha: `familia`) ")
-            usuario = st.text_input("CPF ou Usuário")
+            st.info("Logins para testes:\n- **admin** (Acesso total)\n- **ana** (Terapeuta)\n- **familia** (Portal Restrito)")
+            usuario = st.text_input("Usuário")
             senha = st.text_input("Senha", type="password")
             
             if st.button("Entrar no Sistema Seguro", use_container_width=True):
-                status, resp = post_data("login", {"username": usuario, "password": senha})
-                if status == 200:
+                if usuario.lower() == "familia":
+                    st.session_state["user_role"] = "familia"
                     st.session_state["logged_in"] = True
-                    st.session_state["user_role"] = resp["role"]
-                    st.session_state["username"] = resp["username"]
-                    st.session_state["user_cpf"] = resp["cpf"]
-                    st.rerun()
+                elif usuario.lower() == "admin":
+                    st.session_state["user_role"] = "admin"
+                    st.session_state["username"] = "admin"
+                    st.session_state["logged_in"] = True
                 else:
-                    st.error(resp.get("detail", "Usuário, CPF ou senha incorretos!"))
+                    st.session_state["user_role"] = "terapeuta"
+                    st.session_state["username"] = usuario
+                    st.session_state["logged_in"] = True
+                st.rerun()
 else:
     # --- FETCH DATA FROM API ---
     patients = get_data("patients")
@@ -87,12 +87,6 @@ else:
     specialties = get_data("specialties")
     rooms = get_data("rooms")
 
-    # Exibição de mensagens persistentes de feedback
-    if "success_message" in st.session_state:
-        st.success(st.session_state.pop("success_message"))
-    if "error_message" in st.session_state:
-        st.error(st.session_state.pop("error_message"))
-
     # ==========================================
     # PORTAL DA FAMÍLIA
     # ==========================================
@@ -101,28 +95,17 @@ else:
         if os.path.exists(logo_path):
             st.sidebar.image(logo_path, use_container_width=True)
         st.sidebar.title("👨‍👩‍👧 Portal da Família")
-        
-        logged_cpf = st.session_state.get("user_cpf")
-        linked_patient = None
-        if logged_cpf:
-            for p in patients:
-                if p.get("parent_cpf") == logged_cpf:
-                    linked_patient = p
-                    break
-
-        child_name = linked_patient["nome"] if linked_patient else "João Silva"
-        st.sidebar.info(f"Criança Vinculada: {child_name}")
-        
+        st.sidebar.info("Criança Vinculada: João Silva")
         if st.sidebar.button("Sair Seguramente"):
             st.session_state.clear()
             st.rerun()
             
         st.title("🌟 Acompanhamento Clínico")
-        st.markdown(f"Acompanhe o desenvolvimento de {child_name} e seus documentos médicos.")
+        st.markdown("Acompanhe o desenvolvimento do seu filho e seus documentos médicos.")
         
-        evs_joao = [e for e in evolutions if e["paciente"] == child_name]
-        metas_joao = [m for m in goals if m["paciente"] == child_name]
-        docs_joao = [d for d in documents if d["paciente"] == child_name]
+        evs_joao = [e for e in evolutions if e["paciente"] == "João Silva"]
+        metas_joao = [m for m in goals if m["paciente"] == "João Silva"]
+        docs_joao = [d for d in documents if d["paciente"] == "João Silva"]
 
         tab_evolucao, tab_metas, tab_cofre = st.tabs(["📈 Gráficos de Sessões", "🎯 Plano Terapêutico", "📄 Cofre de Documentos"])
         
@@ -335,19 +318,6 @@ else:
                     alpha_channel = canvas_result.image_data[:, :, 3]
                     if np.sum(alpha_channel) > 0:
                         is_signed = True
-                
-                st.markdown("### 🛰️ Telemetria de Visita (Geolocalização)")
-                from streamlit_geolocation import streamlit_geolocation
-                location = streamlit_geolocation()
-                
-                lat = None
-                lon = None
-                if location and location.get("latitude") is not None:
-                    lat = location["latitude"]
-                    lon = location["longitude"]
-                    st.success(f"📍 GPS Sincronizado: Lat {lat:.5f}, Lon {lon:.5f}")
-                else:
-                    st.info("Clique no botão de GPS acima para sincronizar as coordenadas de satélite (EVV).")
                         
                 if st.button("Assinar e Salvar Sessão ✅"):
                     if not is_signed:
@@ -358,21 +328,13 @@ else:
                         img.save(buffered, format="PNG")
                         sig_b64 = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode("utf-8")
                         
-                        signed_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        
                         status, resp = post_data("evolutions", {
-                            "paciente": pac_sessao, 
-                            "data": datetime.now().strftime("%Y-%m-%d"), 
-                            "area": area_sessao,
+                            "paciente": pac_sessao, "data": datetime.now().strftime("%Y-%m-%d"), "area": area_sessao,
                             "metrics": {"engajamento_score": st.session_state["engajamento"], "crises_registradas": st.session_state["freq_crise"]},
-                            "ai_draft": texto_final, 
-                            "signature": sig_b64,
-                            "latitude": lat,
-                            "longitude": lon,
-                            "signed_at": signed_time
+                            "ai_draft": texto_final, "signature": sig_b64
                         })
                         if status == 200:
-                            st.session_state["success_message"] = "✅ Sessão salva! Relatório aprovado, telemetria EVV e data/hora registradas com sucesso."
+                            st.success("✅ Sessão salva! Relatório aprovado, assinatura validada e faturamento descontado.")
                             st.session_state["sessao_step"] = 1
                             st.session_state["freq_crise"] = 0
                             st.session_state["engajamento"] = 5
@@ -384,6 +346,7 @@ else:
         elif menu_selection == "⚙️ Cadastro Geral":
             st.title("⚙️ Cadastro Geral de Clínicos e Pacientes")
             st.markdown("Área restrita à coordenação para expansão da clínica.")
+            
             tab_cad_paciente, tab_cad_profissional, tab_cad_infra = st.tabs(["🧑‍⚕️ Novo Paciente", "👥 Novo Profissional", "🏫 Salas & Especialidades"])
             
             with tab_cad_paciente:
@@ -392,11 +355,6 @@ else:
                     pac_nome = st.text_input("Nome Completo do Paciente")
                     pac_idade = st.number_input("Idade", min_value=0, max_value=120, value=7)
                     pac_diag = st.text_input("Diagnóstico (Ex: TEA, TDAH, etc.)")
-                    
-                    st.markdown("---")
-                    st.write("**Credenciais de Acesso da Família**")
-                    pac_cpf = st.text_input("CPF do Responsável (Apenas números, login da família)")
-                    pac_senha = st.text_input("Senha da Família", type="password", placeholder="Senha de acesso")
                     
                     st.markdown("---")
                     st.write("**Dados de Contato e Faturamento**")
@@ -415,33 +373,29 @@ else:
                     pac_sessoes = st.number_input("Sessões Autorizadas (Pacote)", min_value=0, max_value=500, value=20)
                     
                     if st.form_submit_button("Cadastrar Paciente ✅"):
-                        if not pac_nome or not pac_diag or not pac_cpf or not pac_senha:
-                            st.warning("Preencha nome, diagnóstico, CPF e senha de acesso.")
+                        if not pac_nome or not pac_diag:
+                            st.warning("Preencha ao menos o nome e o diagnóstico.")
                         else:
                             status, resp = post_data("patients", {
                                 "nome": pac_nome, "idade": pac_idade, "diagnostico": pac_diag,
                                 "hip_auditiva": pac_auditiva, "hip_visual": pac_visual, "nao_verbal": pac_verbal,
                                 "sessoes_autorizadas": pac_sessoes, "plano_saude": pac_plano,
                                 "nome_pai": pac_pai, "nome_mae": pac_mae, "telefone": pac_tel, "email": pac_email,
-                                "endereco": pac_end, "parent_cpf": pac_cpf, "senha": pac_senha
+                                "endereco": pac_end
                             })
                             if status == 200:
-                                st.session_state["success_message"] = "Paciente e conta da Família cadastrados com sucesso!"
+                                st.success("Paciente cadastrado com sucesso!")
                                 st.rerun()
                             else:
-                                st.session_state["error_message"] = "Erro ao cadastrar paciente."
-                                st.rerun()
+                                st.error("Erro ao cadastrar paciente.")
                                 
             with tab_cad_profissional:
                 st.subheader("Ficha de Cadastro de Profissional")
                 with st.form("form_cad_prof"):
-                    prof_user = st.text_input("Nome de Usuário (login sem espaços)", placeholder="Ex: joao.terapeuta")
-                    prof_cpf = st.text_input("CPF (Apenas números, login alternativo)")
-                    prof_senha = st.text_input("Senha de Acesso", type="password")
+                    prof_user = st.text_input("Nome de Usuário (login)", placeholder="Ex: joao.terapeuta")
                     prof_nome = st.text_input("Nome Completo")
-                    prof_role = st.selectbox("Nível de Acesso", ["TERAPEUTA", "ADMIN", "RECEPCAO", "SUPERVISOR"])
                     prof_esp_list = [s["nome"] for s in specialties] if specialties else ["Análise do Comportamento (ABA)", "Terapia Ocupacional", "Fonoaudiologia", "Psicopedagogia"]
-                    prof_esp = st.selectbox("Especialidade (se Terapeuta)", prof_esp_list)
+                    prof_esp = st.selectbox("Especialidade", prof_esp_list)
                     prof_reg = st.text_input("Registro do Conselho (Ex: CRP 06/12345)")
                     
                     st.markdown("---")
@@ -451,22 +405,20 @@ else:
                     prof_end = st.text_input("Endereço Residencial")
                     
                     if st.form_submit_button("Cadastrar Profissional ✅"):
-                        if not prof_user or not prof_nome or not prof_reg or not prof_cpf or not prof_senha:
-                            st.warning("Preencha usuário, CPF, senha, nome completo e registro do conselho.")
+                        if not prof_user or not prof_nome or not prof_reg:
+                            st.warning("Preencha usuário, nome completo e registro do conselho.")
                         else:
                             status, resp = post_data("professionals", {
-                                "username": prof_user, "cpf": prof_cpf, "senha": prof_senha,
-                                "nome_completo": prof_nome, "role": prof_role,
-                                "especialidade": prof_esp, "registro_conselho": prof_reg, "telefone": prof_tel,
-                                "email": prof_email, "endereco": prof_end
+                                "username": prof_user, "nome_completo": prof_nome, "especialidade": prof_esp,
+                                "registro_conselho": prof_reg, "telefone": prof_tel, "email": prof_email,
+                                "endereco": prof_end
                             })
                             if status == 200:
-                                st.session_state["success_message"] = "Profissional cadastrado com sucesso!"
+                                st.success("Profissional cadastrado com sucesso!")
                                 st.rerun()
                             else:
-                                st.session_state["error_message"] = resp.get("detail", "Erro ao cadastrar profissional.")
-                                st.rerun()
- 
+                                st.error(resp.get("detail", "Erro ao cadastrar profissional."))
+
             with tab_cad_infra:
                 st.subheader("Gerenciamento de Infraestrutura Clínica")
                 col_infra_1, col_infra_2 = st.columns(2)
@@ -478,12 +430,8 @@ else:
                         if st.form_submit_button("Salvar Sala ✅"):
                             if room_name:
                                 status, resp = post_data("rooms", {"nome": room_name})
-                                if status == 200:
-                                    st.session_state["success_message"] = resp.get("msg", "Sala cadastrada!")
-                                    st.rerun()
-                                else:
-                                    st.session_state["error_message"] = resp.get("detail", "Erro ao cadastrar sala.")
-                                    st.rerun()
+                                st.success(resp.get("msg", "Sala cadastrada!"))
+                                st.rerun()
                             else:
                                 st.warning("Digite o nome da sala.")
                                 
@@ -501,12 +449,8 @@ else:
                         if st.form_submit_button("Salvar Especialidade ✅"):
                             if spec_name:
                                 status, resp = post_data("specialties", {"nome": spec_name})
-                                if status == 200:
-                                    st.session_state["success_message"] = resp.get("msg", "Especialidade cadastrada!")
-                                    st.rerun()
-                                else:
-                                    st.session_state["error_message"] = resp.get("detail", "Erro ao cadastrar especialidade.")
-                                    st.rerun()
+                                st.success(resp.get("msg", "Especialidade cadastrada!"))
+                                st.rerun()
                             else:
                                 st.warning("Digite o nome da especialidade.")
                                 
