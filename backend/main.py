@@ -1,15 +1,28 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from typing import List, Dict, Any
-from datetime import datetime
-from fpdf import FPDF
-import io
-import os
+import sys
 
-from . import models, database
+try:
+    from fastapi import FastAPI, Depends, HTTPException, status
+    from fastapi.responses import StreamingResponse
+    from sqlalchemy.orm import Session
+    from typing import List, Dict, Any
+    from datetime import datetime
+    from fpdf import FPDF
+    import io
+    import os
+    
+    from . import models, database
+except Exception as e:
+    print("FATAL IMPORT ERROR:", e, file=sys.stderr)
+    sys.stderr.flush()
+    raise e
 
-database.init_db()
+try:
+    database.init_db()
+except Exception as e:
+    print("FATAL DATABASE INIT ERROR:", e, file=sys.stderr)
+    sys.stderr.flush()
+    raise e
+
 app = FastAPI(title="RM Comportamental API - Sistema Clínico Avançado")
 
 def get_db():
