@@ -18,6 +18,7 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(Enum(RoleEnum), nullable=False)
+    cpf = Column(String, unique=True, nullable=True)
     
     # NOVOS CAMPOS - Fase 6 (Profissionais)
     full_name = Column(String, nullable=True)
@@ -52,6 +53,7 @@ class Patient(Base):
     phone = Column(String, nullable=True)
     email = Column(String, nullable=True)
     address = Column(String, nullable=True)
+    parent_cpf = Column(String, nullable=True)
     
     # Relações
     appointments = relationship("Appointment", back_populates="patient")
@@ -99,6 +101,11 @@ class ClinicalEvolution(Base):
     # NOVOS CAMPOS - Fase 4
     ai_draft_text = Column(String, nullable=True)
     guardian_signature = Column(String, nullable=True) # EVV compliance
+    
+    # Telemetria EVV e Carimbo Sincronizado - Fase 9
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    signed_at = Column(String, nullable=True)
     
     patient = relationship("Patient", back_populates="evolutions")
 
