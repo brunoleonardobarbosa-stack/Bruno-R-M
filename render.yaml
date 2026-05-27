@@ -19,10 +19,7 @@ services:
     startCommand: streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: API_URL
-        fromRoute:
-          type: web
-          name: neurolink-api
-          property: url
+        value: https://neurolink-api.onrender.com
 
 databases:
   - name: neurolink-db
