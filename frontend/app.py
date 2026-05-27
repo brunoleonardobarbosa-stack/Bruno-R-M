@@ -87,6 +87,12 @@ else:
     specialties = get_data("specialties")
     rooms = get_data("rooms")
 
+    # Exibição de mensagens persistentes de feedback
+    if "success_message" in st.session_state:
+        st.success(st.session_state.pop("success_message"))
+    if "error_message" in st.session_state:
+        st.error(st.session_state.pop("error_message"))
+
     # ==========================================
     # PORTAL DA FAMÍLIA
     # ==========================================
@@ -346,7 +352,6 @@ else:
         elif menu_selection == "⚙️ Cadastro Geral":
             st.title("⚙️ Cadastro Geral de Clínicos e Pacientes")
             st.markdown("Área restrita à coordenação para expansão da clínica.")
-            
             tab_cad_paciente, tab_cad_profissional, tab_cad_infra = st.tabs(["🧑‍⚕️ Novo Paciente", "👥 Novo Profissional", "🏫 Salas & Especialidades"])
             
             with tab_cad_paciente:
@@ -384,18 +389,20 @@ else:
                                 "endereco": pac_end
                             })
                             if status == 200:
-                                st.success("Paciente cadastrado com sucesso!")
+                                st.session_state["success_message"] = "Paciente cadastrado com sucesso!"
                                 st.rerun()
                             else:
-                                st.error("Erro ao cadastrar paciente.")
+                                st.session_state["error_message"] = "Erro ao cadastrar paciente."
+                                st.rerun()
                                 
             with tab_cad_profissional:
                 st.subheader("Ficha de Cadastro de Profissional")
                 with st.form("form_cad_prof"):
                     prof_user = st.text_input("Nome de Usuário (login)", placeholder="Ex: joao.terapeuta")
                     prof_nome = st.text_input("Nome Completo")
+                    prof_role = st.selectbox("Nível de Acesso", ["TERAPEUTA", "ADMIN", "RECEPCAO", "SUPERVISOR"])
                     prof_esp_list = [s["nome"] for s in specialties] if specialties else ["Análise do Comportamento (ABA)", "Terapia Ocupacional", "Fonoaudiologia", "Psicopedagogia"]
-                    prof_esp = st.selectbox("Especialidade", prof_esp_list)
+                    prof_esp = st.selectbox("Especialidade (se Terapeuta)", prof_esp_list)
                     prof_reg = st.text_input("Registro do Conselho (Ex: CRP 06/12345)")
                     
                     st.markdown("---")
@@ -409,16 +416,17 @@ else:
                             st.warning("Preencha usuário, nome completo e registro do conselho.")
                         else:
                             status, resp = post_data("professionals", {
-                                "username": prof_user, "nome_completo": prof_nome, "especialidade": prof_esp,
-                                "registro_conselho": prof_reg, "telefone": prof_tel, "email": prof_email,
-                                "endereco": prof_end
+                                "username": prof_user, "nome_completo": prof_nome, "role": prof_role,
+                                "especialidade": prof_esp, "registro_conselho": prof_reg, "telefone": prof_tel,
+                                "email": prof_email, "endereco": prof_end
                             })
                             if status == 200:
-                                st.success("Profissional cadastrado com sucesso!")
+                                st.session_state["success_message"] = "Profissional cadastrado com sucesso!"
                                 st.rerun()
                             else:
-                                st.error(resp.get("detail", "Erro ao cadastrar profissional."))
-
+                                st.session_state["error_message"] = resp.get("detail", "Erro ao cadastrar profissional.")
+                                st.rerun()
+ 
             with tab_cad_infra:
                 st.subheader("Gerenciamento de Infraestrutura Clínica")
                 col_infra_1, col_infra_2 = st.columns(2)
@@ -430,8 +438,12 @@ else:
                         if st.form_submit_button("Salvar Sala ✅"):
                             if room_name:
                                 status, resp = post_data("rooms", {"nome": room_name})
-                                st.success(resp.get("msg", "Sala cadastrada!"))
-                                st.rerun()
+                                if status == 200:
+                                    st.session_state["success_message"] = resp.get("msg", "Sala cadastrada!")
+                                    st.rerun()
+                                else:
+                                    st.session_state["error_message"] = resp.get("detail", "Erro ao cadastrar sala.")
+                                    st.rerun()
                             else:
                                 st.warning("Digite o nome da sala.")
                                 
@@ -449,8 +461,12 @@ else:
                         if st.form_submit_button("Salvar Especialidade ✅"):
                             if spec_name:
                                 status, resp = post_data("specialties", {"nome": spec_name})
-                                st.success(resp.get("msg", "Especialidade cadastrada!"))
-                                st.rerun()
+                                if status == 200:
+                                    st.session_state["success_message"] = resp.get("msg", "Especialidade cadastrada!")
+                                    st.rerun()
+                                else:
+                                    st.session_state["error_message"] = resp.get("detail", "Erro ao cadastrar especialidade.")
+                                    st.rerun()
                             else:
                                 st.warning("Digite o nome da especialidade.")
                                 

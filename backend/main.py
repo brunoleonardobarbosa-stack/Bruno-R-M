@@ -362,10 +362,16 @@ def create_professional(data: dict, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Nome de usuário já cadastrado!")
         
+    role_str = data.get("role", "TERAPEUTA").upper()
+    if role_str in models.RoleEnum.__members__:
+        role_enum = models.RoleEnum[role_str]
+    else:
+        role_enum = models.RoleEnum.TERAPEUTA
+
     new_user = models.User(
         username=data["username"],
         hashed_password="hashed_pass",
-        role=models.RoleEnum.TERAPEUTA,
+        role=role_enum,
         full_name=data["nome_completo"],
         address=data["endereco"],
         phone=data["telefone"],
